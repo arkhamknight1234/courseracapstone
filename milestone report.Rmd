@@ -1,0 +1,141 @@
+---
+title: "Milestone Report"
+author: "Sheetal"
+date: "4 March 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This is the milstone report for the coursera data science capstone. the capstone project is to create a predictive text model using a large text corpus of documents as training data. Natural language processing techniques will be used to perform the analysis and build the predictive model.
+
+This milestone report describes the major features of the training data with our exploratory data analysis and summarizes our plans for creating the predictive model.
+
+```{r }
+library(plyr)
+library(dplyr)
+library(knitr)
+library(tm)
+
+``` 
+
+#Downloading the data
+The data sets consist of text from 3 different sources: 1) News, 2) Blogs and 3) Twitter feeds. 
+
+```{r }
+
+twitter<-file("en_US.twitter.txt","r")
+twitter_lines<-readLines(twitter)
+close(twitter)
+
+
+blogs<-file("en_US.blogs.txt","r")
+blogs_lines<-readLines(blogs)
+close(blogs)
+
+news<-file("en_US.news.txt","r")
+news_lines<-readLines(news)
+close(news)
+
+
+```
+#basic summary stats
+To start to understand the data imported. We will examine line counts, word counts and mean words per line.
+
+
+```{r}
+library(stringi)
+# Get words in files
+lineBlogs.words <- stri_count_words(blogs_lines)
+lineNews.words <- stri_count_words(news_lines)
+lineTwitter.words <- stri_count_words(twitter_lines)
+# Summary of the data sets
+data.frame(source = c("blogs", "news", "twitter"),
+           num.lines = c(length(blogs_lines), length(news_lines), length(twitter_lines)),
+           num.words = c(sum(lineBlogs.words), sum(lineNews.words), sum(lineTwitter.words)),
+           mean.num.words = c(mean(lineBlogs.words), mean(lineNews.words), mean(lineTwitter.words)))
+```
+
+This shows that twitter has the most and words in total. Blogs have the highest mean number of words and twitter has the lowest mean number of words.
+
+
+#sampling and cleaning the data
+
+Before performing exploratory analysis, we must clean the data first. This involves removing URLs, special characters, punctuations, numbers, excess whitespace, stopwords, and changing the text to lower case. Since the data sets are quite large, we will randomly choose 2% of the data to demonstrate the data cleaning and exploratory analysisThe english language has around 5k commonly used wordS. This means we wont need to use all the data, and should be able to take a sample.
+
+
+```{r}
+library(tm)
+# Sample the data
+set.seed(5000)
+data.sample <- c(sample(blogs_lines, length(blogs_lines) * 0.02),
+                 sample(news_lines, length(news_lines) * 0.02),
+                 sample(twitter_lines, length(twitter_lines) * 0.02))
+# Create corpus and clean the data
+corpus <- VCorpus(VectorSource(data.sample))
+toSpace <- content_transformer(function(x, pattern) gsub(pattern, " ", x))
+corpus <- tm_map(corpus, toSpace, "(f|ht)tp(s?)://(.*)[.][a-z]+")
+corpus <- tm_map(corpus, toSpace, "@[^\\s]+")
+corpus <- tm_map(corpus, tolower)
+corpus <- tm_map(corpus, removeWords, stopwords("en"))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, stripWhitespace)
+corpus <- tm_map(corpus, PlainTextDocument)
+dataframe<-data.frame(text=unlist(sapply(corpus, `[`, "content")), stringsAsFactors=FALSE)
+
+
+
+```
+
+#view the data
+The dataset is now ready to be viewed.We have 66732 sentences
+```{r}
+head(dataframe,2)
+#Num lines
+length(dataframe)
+#Num terms
+sum(sapply(dataframe, length))
+```
+
+
+```{r}
+frequencyTable <- function(termList){
+  term <- data.frame(unlist(termList))
+  grouped <- as.data.frame(table(term))
+  freq <- grouped[order(-grouped$Freq),]
+  rownames(freq) <- 1:nrow(freq)
+  
+  total <- sum(freq$Freq)
+  freq$CumFreq <- cumsum(freq$Freq)
+  freq$Coverage <- freq$CumFreq/total
+  
+  return(freq)
+}
+sampleENTermFrequency <- frequencyTable(dataframe)
+head(sampleENTermFrequency, 15)  
+
+library(ggplot2)
+
+sampleENTermFrequency <- frequencyTable(dataframe)
+head(sampleENTermFrequency, 15)  
+
+tmp <- sampleENTermFrequency[1:50,]
+tmp$termLength <-  nchar(as.character(tmp$term))
+ggplot(tmp, aes(x=reorder(term,Freq), y=Freq, fill=termLength)) +
+    geom_bar(stat="identity") +
+    coord_flip() + 
+    theme(panel.border = element_blank(), 
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), 
+          panel.background = element_blank(),
+          axis.title.y=element_blank(),
+          axis.title.x=element_blank())
+```
+
+
+
